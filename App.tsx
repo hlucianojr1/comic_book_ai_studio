@@ -265,13 +265,13 @@ const App: React.FC = () => {
     });
   };
 
-  const updatePage = useCallback((pageIndex: number, updatedPage: Partial<Page>) => {
+  const updatePage = (pageIndex: number, updatedPage: Partial<Page>) => {
     setComicBook(prev => {
       const newPages = [...prev.pages];
       newPages[pageIndex] = { ...newPages[pageIndex], ...updatedPage };
       return { ...prev, pages: newPages };
     });
-  }, []);
+  };
 
   const handleGeneratePage = async (pageIndex: number) => {
     const page = comicBook.pages[pageIndex];
