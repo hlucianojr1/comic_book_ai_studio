@@ -3,7 +3,7 @@ import { StudioState, Agent, StepStatus, StudioStepInfo } from '../types';
 import { 
     CheckCircleIcon, LoadingCircleIcon, PendingCircleIcon, ErrorCircleIcon, InputRequiredIcon,
     PlayIcon, StopIcon, RobotIcon, SendIcon, SunIcon, MoonIcon, ChevronLeftIcon, RefreshCwIcon,
-    UserCheckIcon, ThumbsUpIcon, ThumbsDownIcon, ChatIcon,
+    UserCheckIcon, ThumbsUpIcon, ThumbsDownIcon, ChatIcon, CloseIcon,
 } from './Icons';
 import Spinner from './Spinner';
 import StudioCanvas from './StudioCanvas';
@@ -240,11 +240,13 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     const [userInput, setUserInput] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [activeTab, setActiveTab] = useState<'generation' | 'chat'>('generation');
+    const [isStatusPopupVisible, setIsStatusPopupVisible] = useState(false);
     
     const orchestratorController = useRef<AbortController | null>(null);
     const userResolverRef = useRef<((value: string) => void) | null>(null);
     const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
     const stepRefs = useRef<Record<number, HTMLLIElement | null>>({});
+    const statusPopupTimer = useRef<number | null>(null);
 
     useEffect(() => {
       if (isRunning && studioState.current_step > 0 && isSidebarOpen) {
@@ -256,6 +258,43 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
         }, 300); // Delay slightly to allow UI to render
       }
     }, [studioState.current_step, isRunning, isSidebarOpen]);
+    
+    useEffect(() => {
+        // Don't show the initial "Ready to start." message as a popup.
+        if (studioState.last_action_summary === 'Ready to start.') {
+            return;
+        }
+
+        // If there's an existing timer, clear it.
+        if (statusPopupTimer.current) {
+            clearTimeout(statusPopupTimer.current);
+        }
+
+        // Make the popup visible for any new message.
+        setIsStatusPopupVisible(true);
+
+        const isAwaitingInteraction =
+            studioState.status === StepStatus.PENDING_USER_INPUT ||
+            studioState.status === StepStatus.PENDING_USER_APPROVAL;
+        
+        const isTerminalState =
+            studioState.status === StepStatus.FAIL ||
+            (studioState.status === StepStatus.SUCCESS && studioState.current_step === ALL_STEPS.length);
+
+        // Don't auto-hide if waiting for the user or if it's a final state.
+        if (!isAwaitingInteraction && !isTerminalState) {
+            statusPopupTimer.current = window.setTimeout(() => {
+                setIsStatusPopupVisible(false);
+            }, 7000); // 7 seconds
+        }
+
+        return () => {
+            if (statusPopupTimer.current) {
+                clearTimeout(statusPopupTimer.current);
+            }
+        };
+    }, [studioState.last_action_summary, studioState.status, studioState.current_step]);
+
 
     const handleStart = useCallback(async () => {
         if (!prompt.trim()) {
@@ -465,9 +504,16 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 <div className="flex-1 relative overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700">
                     <StudioCanvas history={studioState.history} />
                     
-                    {/* Agent Status as an overlay */}
-                    <div className="absolute bottom-4 right-4 w-full max-w-md z-10">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col p-4 max-h-[40vh] overflow-hidden">
+                    {/* Agent Status Popup */}
+                    <div className={`absolute bottom-4 right-4 w-full max-w-md z-20 transition-all duration-500 ease-in-out ${isStatusPopupVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col p-4 max-h-[40vh] overflow-hidden relative">
+                           <button 
+                                onClick={() => setIsStatusPopupVisible(false)}
+                                className="absolute top-3 right-3 p-1 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                aria-label="Close status"
+                            >
+                                <CloseIcon className="w-5 h-5" />
+                            </button>
                            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Agent Status</h3>
                            <div className="flex-1 bg-gray-100 dark:bg-gray-900/80 rounded-lg p-4 flex flex-col justify-between overflow-y-auto">
                                <div className="prose prose-sm dark:prose-invert max-w-none">
