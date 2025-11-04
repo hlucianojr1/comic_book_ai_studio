@@ -34,6 +34,10 @@ export interface Page {
   backgroundPrompt: string; // Page-specific background
   sharedBackgroundUrl: string | null; // Generated background for the page
   isGeneratingBackground: boolean;
+  customLayout?: {
+    columns: number[]; // Store proportions, e.g., [1, 1] for 1fr 1fr
+    rows: number[];
+  };
 }
 
 export interface LayoutTemplate {
@@ -41,6 +45,8 @@ export interface LayoutTemplate {
   name: string;
   description: string;
   panelCount: number;
+  colCount: number;
+  rowCount: number;
   containerClassName: string;
   panelClassNames?: string[];
   panelAspectRatios?: string[];

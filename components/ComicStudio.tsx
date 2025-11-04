@@ -429,7 +429,14 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                                     <div className="flex-grow">
                                         <p className={`font-semibold ${isCurrent ? 'text-indigo-800 dark:text-indigo-200' : 'text-gray-800 dark:text-gray-200'}`}>{step.title}</p>
                                         <p className="text-sm text-gray-500 dark:text-gray-400">{step.agent.split(':')[1].trim()}</p>
-                                        {step.summary && <p className="text-xs italic text-gray-400 dark:text-gray-500 mt-1">{step.summary}</p>}
+                                        {step.summary && (
+                                            <p className="text-xs italic text-gray-400 dark:text-gray-500 mt-1">
+                                                {([1, 2, 3, 4, 10].includes(step.step) && step.status === StepStatus.SUCCESS)
+                                                    ? 'Output available on canvas.'
+                                                    : step.summary
+                                                }
+                                            </p>
+                                        )}
                                     </div>
                                 </li>
                             );

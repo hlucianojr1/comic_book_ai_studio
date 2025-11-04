@@ -7,6 +7,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: 'Full-Page Splash',
     description: 'A single, impactful image.',
     panelCount: 1,
+    colCount: 1,
+    rowCount: 1,
     containerClassName: 'grid grid-cols-1 grid-rows-1',
     panelClassNames: [],
     panelAspectRatios: ['3:4'],
@@ -16,6 +18,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: '2-Panel Vertical Stack',
     description: 'Two panels stacked on top of each other.',
     panelCount: 2,
+    colCount: 1,
+    rowCount: 2,
     containerClassName: 'grid grid-cols-1 grid-rows-2 gap-4',
     panelClassNames: [],
     panelAspectRatios: ['4:3', '4:3'],
@@ -25,6 +29,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: '3-Panel Horizontal Stack',
     description: 'Three panels arranged side-by-side.',
     panelCount: 3,
+    colCount: 3,
+    rowCount: 1,
     containerClassName: 'grid grid-cols-3 grid-rows-1 gap-4',
     panelClassNames: [],
     panelAspectRatios: ['9:16', '9:16', '9:16'],
@@ -34,6 +40,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: '4-Panel Grid',
     description: 'A classic 2x2 comic grid.',
     panelCount: 4,
+    colCount: 2,
+    rowCount: 2,
     containerClassName: 'grid grid-cols-2 grid-rows-2 gap-4',
     panelClassNames: [],
     panelAspectRatios: ['3:4', '3:4', '3:4', '3:4'],
@@ -43,6 +51,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: '3-Panel Storyteller (Manga-style)',
     description: 'A wide establishing panel above two smaller panels.',
     panelCount: 3,
+    colCount: 2,
+    rowCount: 2,
     containerClassName: 'grid grid-cols-2 grid-rows-2 gap-4',
     panelClassNames: [
         'col-span-2', // Top wide panel
@@ -56,6 +66,8 @@ export const LAYOUT_TEMPLATES: LayoutTemplate[] = [
     name: '4-Panel Splash & Dash (Manga-style)',
     description: 'A tall splash panel on the left with three stacked panels on the right.',
     panelCount: 4,
+    colCount: 3,
+    rowCount: 3,
     containerClassName: 'grid grid-cols-3 grid-rows-3 gap-4',
     panelClassNames: [
         'row-span-3',           // Left tall panel
