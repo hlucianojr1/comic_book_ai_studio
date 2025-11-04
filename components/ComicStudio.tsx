@@ -3,12 +3,13 @@ import { StudioState, Agent, StepStatus, StudioStepInfo } from '../types';
 import { 
     CheckCircleIcon, LoadingCircleIcon, PendingCircleIcon, ErrorCircleIcon, InputRequiredIcon,
     PlayIcon, StopIcon, RobotIcon, SendIcon, SunIcon, MoonIcon, ChevronLeftIcon, RefreshCwIcon,
-    UserCheckIcon, ThumbsUpIcon, ThumbsDownIcon,
+    UserCheckIcon, ThumbsUpIcon, ThumbsDownIcon, ChatIcon,
 } from './Icons';
 import Spinner from './Spinner';
 import StudioCanvas from './StudioCanvas';
 import { generateImage, editImage, generateText, generateStructuredText } from '../services/geminiService';
 import { Type } from '@google/genai';
+import AIChat from './AIChat';
 
 
 interface ComicStudioProps {
@@ -238,6 +239,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     const [studioState, setStudioState] = useState<StudioState>(getInitialState());
     const [userInput, setUserInput] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [activeTab, setActiveTab] = useState<'generation' | 'chat'>('generation');
     
     const orchestratorController = useRef<AbortController | null>(null);
     const userResolverRef = useRef<((value: string) => void) | null>(null);
@@ -348,6 +350,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     const handleReset = () => {
         if (isRunning) handleStop();
         setStudioState(getInitialState());
+        setActiveTab('generation');
     };
 
     const handleUserInputSubmit = (e: React.FormEvent) => {
@@ -497,41 +500,68 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 {/* Controls at the bottom */}
                 <div className="flex-shrink-0 mt-6">
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                        <textarea
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            placeholder="e.g., A noir detective story in a city of robots..."
-                            className="w-full h-24 p-3 bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-800 dark:text-gray-200"
-                            disabled={isRunning}
-                        />
-                        <div className="mt-4 flex items-center justify-end gap-3">
-                             <button onClick={handleReset} className="px-5 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md flex items-center gap-2" title="Reset Workflow" disabled={isRunning && !isAwaitingApproval}>
-                                <RefreshCwIcon className="w-4 h-4" />
-                                Reset
+                         {/* Tab buttons */}
+                        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-4">
+                            <button
+                                onClick={() => setActiveTab('generation')}
+                                className={`flex items-center gap-2 px-4 py-2 font-semibold transition-colors ${activeTab === 'generation' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                                disabled={isRunning}
+                            >
+                                <RobotIcon className="w-5 h-5" />
+                                Start Generation
                             </button>
-                            {isAwaitingApproval ? (
-                                <>
-                                    <button onClick={handleReject} className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
-                                        <ThumbsDownIcon className="w-5 h-5"/>
-                                        Reject & Stop
-                                    </button>
-                                    <button onClick={handleApprove} className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors flex items-center gap-2">
-                                        <ThumbsUpIcon className="w-5 h-5"/>
-                                        Approve & Continue
-                                    </button>
-                                </>
-                            ) : !isRunning ? (
-                                <button onClick={handleStart} className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-500 transition-colors flex items-center gap-2">
-                                    <PlayIcon className="w-5 h-5"/>
-                                    Start Generation
-                                </button>
-                            ) : (
-                                <button onClick={handleStop} className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
-                                    <StopIcon className="w-5 h-5"/>
-                                    Stop Process
-                                </button>
-                            )}
+                            <button
+                                onClick={() => setActiveTab('chat')}
+                                className={`flex items-center gap-2 px-4 py-2 font-semibold transition-colors ${activeTab === 'chat' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                disabled={studioState.current_step === 0}
+                                title={studioState.current_step === 0 ? "Start the generation process to enable AI Chat" : "Collaborate with AI agents"}
+                            >
+                                <ChatIcon className="w-5 h-5" />
+                                AI Chat
+                            </button>
                         </div>
+                        {activeTab === 'generation' && (
+                            <div className="h-64 flex flex-col">
+                                <textarea
+                                    value={prompt}
+                                    onChange={(e) => setPrompt(e.target.value)}
+                                    placeholder="e.g., A noir detective story in a city of robots..."
+                                    className="w-full p-3 bg-gray-100 dark:bg-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none text-gray-800 dark:text-gray-200 flex-1"
+                                    disabled={isRunning}
+                                />
+                                <div className="mt-4 flex items-center justify-end gap-3">
+                                    <button onClick={handleReset} className="px-5 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md flex items-center gap-2" title="Reset Workflow" disabled={isRunning && !isAwaitingApproval}>
+                                        <RefreshCwIcon className="w-4 h-4" />
+                                        Reset
+                                    </button>
+                                    {isAwaitingApproval ? (
+                                        <>
+                                            <button onClick={handleReject} className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
+                                                <ThumbsDownIcon className="w-5 h-5"/>
+                                                Reject & Stop
+                                            </button>
+                                            <button onClick={handleApprove} className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors flex items-center gap-2">
+                                                <ThumbsUpIcon className="w-5 h-5"/>
+                                                Approve & Continue
+                                            </button>
+                                        </>
+                                    ) : !isRunning ? (
+                                        <button onClick={handleStart} className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-500 transition-colors flex items-center gap-2">
+                                            <PlayIcon className="w-5 h-5"/>
+                                            Start Generation
+                                        </button>
+                                    ) : (
+                                        <button onClick={handleStop} className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
+                                            <StopIcon className="w-5 h-5"/>
+                                            Stop Process
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {activeTab === 'chat' && (
+                            <AIChat steps={ALL_STEPS} />
+                        )}
                     </div>
                 </div>
             </main>
