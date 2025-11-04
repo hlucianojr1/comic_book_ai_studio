@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Comic Book Creator</title>
+    <script>
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+
+        // These flags and the callback mechanism prevent race conditions by ensuring
+        // both Google scripts are loaded before the React app attempts to initialize them.
+        window.gapiLoaded = false;
+        window.gsiLoaded = false;
+    
+        function onGapiLoad() {
+          window.gapiLoaded = true;
+          if (window.gsiLoaded && window.onGoogleScriptsLoad) {
+            window.onGoogleScriptsLoad();
+          }
+        }
+    
+        function onGsiLoad() {
+          window.gsiLoaded = true;
+          if (window.gapiLoaded && window.onGoogleScriptsLoad) {
+            window.onGoogleScriptsLoad();
+          }
+        }
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoad()"></script>
+    <script src="https://apis.google.com/js/api.js" async defer onload="onGapiLoad()"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.26.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "file-saver": "https://aistudiocdn.com/file-saver@^2.0.5",
+    "jszip": "https://aistudiocdn.com/jszip@^3.10.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

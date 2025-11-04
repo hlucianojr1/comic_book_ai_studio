@@ -1,0 +1,5 @@
+{
+  "name": "AI Comic Studio & Creator",
+  "description": "An AI-powered application with two modes. A manual Comic Creator to design layouts and generate panel art, and an automated Comic Studio that uses a multi-agent system to generate entire comic pages from a single concept.",
+  "requestFramePermissions": []
+}
