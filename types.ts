@@ -78,7 +78,6 @@ export interface StudioState {
     current_step: number;
     active_agent: Agent;
     last_action_summary: string;
-    image_output_url: string | null;
     next_instruction: string | null;
     status: StepStatus;
     history: StudioStepInfo[];
@@ -90,4 +89,5 @@ export interface StudioStepInfo {
     agent: Agent;
     status: StepStatus;
     summary?: string;
+    imageUrl?: string | null;
 }

@@ -1,16 +1,11 @@
-
-
-
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { StudioState, Agent, StepStatus, StudioStepInfo } from '../types';
 import { 
     CheckCircleIcon, LoadingCircleIcon, PendingCircleIcon, ErrorCircleIcon, InputRequiredIcon,
     PlayIcon, StopIcon, RobotIcon, SendIcon, SunIcon, MoonIcon, ChevronLeftIcon, RefreshCwIcon,
-    ExpandIcon,
 } from './Icons';
 import Spinner from './Spinner';
-import StudioPreviewModal from './StudioPreviewModal';
+import StudioCanvas from './StudioCanvas';
 import { generateImage, editImage, generateText, generateStructuredText } from '../services/geminiService';
 
 
@@ -19,7 +14,7 @@ interface ComicStudioProps {
   onToggleTheme: () => void;
 }
 
-const ALL_STEPS: Omit<StudioStepInfo, 'status'>[] = [
+const ALL_STEPS: Omit<StudioStepInfo, 'status' | 'imageUrl'>[] = [
     { step: 1, title: 'Series Bible', agent: Agent.A1 },
     { step: 2, title: 'Plot Outline', agent: Agent.A1 },
     { step: 3, title: 'Reflection Check', agent: Agent.A1 },
@@ -33,13 +28,12 @@ const ALL_STEPS: Omit<StudioStepInfo, 'status'>[] = [
 ];
 
 const getInitialHistory = (): StudioStepInfo[] => 
-    ALL_STEPS.map(step => ({ ...step, status: StepStatus.PENDING }));
+    ALL_STEPS.map(step => ({ ...step, status: StepStatus.PENDING, imageUrl: null }));
 
 const getInitialState = (): StudioState => ({
     current_step: 0,
     active_agent: Agent.A1,
     last_action_summary: 'Ready to start.',
-    image_output_url: null,
     next_instruction: null,
     status: StepStatus.PENDING,
     history: getInitialHistory(),
@@ -194,19 +188,19 @@ const mockOrchestrator = async (
                 ...prev,
                 status: StepStatus.FAIL,
                 last_action_summary: `Error at step ${currentStepInfo.step} (${currentStepInfo.title}): ${errorMessage}`,
-                image_output_url: currentImageUrl, // show the last successful image
-                history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.FAIL, summary: errorMessage } : h),
+                history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.FAIL, summary: errorMessage, imageUrl: currentImageUrl } : h),
             }));
             return; // Stop the orchestrator
         }
         
+        const finalSummary = stepSummary.split(': ')[1]?.trim() ?? stepSummary;
+
         // 4. Update state to SUCCESS for the current step
         updateState(prev => ({
             ...prev,
             status: currentStepInfo.step === ALL_STEPS.length ? StepStatus.SUCCESS : StepStatus.IN_PROGRESS,
             last_action_summary: stepSummary,
-            image_output_url: currentImageUrl,
-            history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.SUCCESS, summary: stepSummary.split(': ')[1]?.trim() } : h),
+            history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.SUCCESS, summary: finalSummary, imageUrl: currentImageUrl } : h),
         }));
     }
 };
@@ -218,7 +212,6 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     const [studioState, setStudioState] = useState<StudioState>(getInitialState());
     const [userInput, setUserInput] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     
     const orchestratorController = useRef<AbortController | null>(null);
     const userResolverRef = useRef<((value: string) => void) | null>(null);
@@ -427,79 +420,41 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 </div>
 
                 {/* Main Content Area */}
-                <div className="flex-1 mt-6 grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-                    {/* Visual Output */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col p-4">
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Visual Output</h3>
-                        <div className="flex-1 bg-gray-100 dark:bg-gray-700/50 rounded-md flex items-center justify-center relative overflow-hidden group">
-                            {studioState.status === StepStatus.IN_PROGRESS && studioState.image_output_url === null && (
-                                <div className="text-center text-gray-500 dark:text-gray-400">
-                                    <RobotIcon className="w-16 h-16 mx-auto animate-pulse"/>
-                                    <p className="mt-2">Waiting for first visual output...</p>
-                                </div>
-                            )}
-                             {studioState.status === StepStatus.IN_PROGRESS && studioState.current_step > 4 && studioState.image_output_url && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-10">
-                                    <Spinner />
-                                    <span className="ml-3 text-white">Generating next step...</span>
-                                </div>
-                            )}
-                            {studioState.image_output_url ? (
-                                <>
-                                    <img src={studioState.image_output_url} alt="Generated comic art" className="w-full h-full object-contain" />
-                                    <button 
-                                        onClick={() => setIsPreviewOpen(true)}
-                                        className="absolute top-2 right-2 bg-black/60 p-2 rounded-md text-white opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:bg-black/80"
-                                        title="Expand Preview"
-                                    >
-                                        <ExpandIcon className="w-5 h-5" />
-                                    </button>
-                                </>
-                            ) : studioState.status !== StepStatus.IN_PROGRESS && (
-                                <div className="text-center text-gray-500 dark:text-gray-400">
-                                     <p>No image generated yet.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Agent Status and User Input */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col p-4 overflow-hidden">
-                       <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Agent Status</h3>
-                       <div className="flex-1 bg-gray-100 dark:bg-gray-900/80 rounded-lg p-4 flex flex-col justify-between overflow-y-auto">
-                           <div className="prose prose-sm dark:prose-invert max-w-none">
-                                <p className="font-mono text-xs uppercase text-indigo-500 dark:text-indigo-400">{studioState.active_agent}</p>
-                               <p>{studioState.last_action_summary}</p>
-                           </div>
-                           {isAwaitingUserInput && (
-                               <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                                   <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">{studioState.next_instruction}</p>
-                                   <form onSubmit={handleUserInputSubmit} className="flex gap-2">
-                                       <input
-                                           type="text"
-                                           value={userInput}
-                                           onChange={(e) => setUserInput(e.target.value)}
-                                           className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                           placeholder="Provide clarification..."
-                                           autoFocus
-                                       />
-                                       <button type="submit" className="p-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-400">
-                                            <SendIcon className="w-5 h-5"/>
-                                       </button>
-                                   </form>
+                <div className="flex-1 mt-6 relative overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <StudioCanvas history={studioState.history} />
+                    
+                    {/* Agent Status as an overlay */}
+                    <div className="absolute bottom-4 right-4 w-full max-w-md z-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col p-4 max-h-[40vh] overflow-hidden">
+                           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Agent Status</h3>
+                           <div className="flex-1 bg-gray-100 dark:bg-gray-900/80 rounded-lg p-4 flex flex-col justify-between overflow-y-auto">
+                               <div className="prose prose-sm dark:prose-invert max-w-none">
+                                   <p className="font-mono text-xs uppercase text-indigo-500 dark:text-indigo-400">{studioState.active_agent}</p>
+                                   <p>{studioState.last_action_summary}</p>
                                </div>
-                           )}
-                       </div>
+                               {isAwaitingUserInput && (
+                                   <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                                       <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">{studioState.next_instruction}</p>
+                                       <form onSubmit={handleUserInputSubmit} className="flex gap-2">
+                                           <input
+                                               type="text"
+                                               value={userInput}
+                                               onChange={(e) => setUserInput(e.target.value)}
+                                               className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                               placeholder="Provide clarification..."
+                                               autoFocus
+                                           />
+                                           <button type="submit" className="p-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-400">
+                                                <SendIcon className="w-5 h-5"/>
+                                           </button>
+                                       </form>
+                                   </div>
+                               )}
+                           </div>
+                        </div>
                     </div>
                 </div>
             </main>
-
-            {isPreviewOpen && studioState.image_output_url && (
-                <StudioPreviewModal
-                    imageUrl={studioState.image_output_url}
-                    onClose={() => setIsPreviewOpen(false)}
-                />
-            )}
         </div>
     );
 };
