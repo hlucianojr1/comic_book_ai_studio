@@ -72,6 +72,7 @@ export enum StepStatus {
     SUCCESS = 'SUCCESS',
     FAIL = 'FAIL',
     PENDING_USER_INPUT = 'PENDING_USER_INPUT',
+    PENDING_USER_APPROVAL = 'PENDING_USER_APPROVAL',
 }
 
 export interface StudioState {

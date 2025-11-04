@@ -214,7 +214,7 @@ const Panel: React.FC<PanelProps> = ({ panel, onPanelChange, aspectRatio, isFocu
                 {isFocused ? <CollapseIcon className="w-5 h-5"/> : <FocusIcon className="w-5 h-5"/>}
               </button>
             </div>
-            <div className="absolute bottom-2 right-2 bg-black/50 p-1 rounded-md flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+            <div className="absolute bottom-2 right-2 bg-black/50 p-1 rounded-md flex items-center gap-1 z-20">
                 <button onClick={handleZoomIn} title="Zoom In" className="p-1 text-white hover:bg-white/20 rounded"><ZoomInIcon className="w-5 h-5"/></button>
                 <button onClick={handleZoomOut} title="Zoom Out" className="p-1 text-white hover:bg-white/20 rounded"><ZoomOutIcon className="w-5 h-5"/></button>
                 {scale > MIN_SCALE && <button onClick={handleReset} title="Reset View" className="p-1 text-white hover:bg-white/20 rounded"><ExpandIcon className="w-5 h-5"/></button>}

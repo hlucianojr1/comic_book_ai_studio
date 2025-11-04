@@ -1,16 +1,19 @@
+
 import { ComicBook } from '../types';
 import { createProjectBlob, loadProjectFromBlob } from './projectArchiver';
 
 // These would come from your environment variables
 const API_KEY = process.env.API_KEY!;
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
-const APP_ID = CLIENT_ID.split('-')[0];
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const APP_ID = CLIENT_ID ? CLIENT_ID.split('-')[0] : undefined;
+
+const isDriveConfigured = !!(CLIENT_ID && !CLIENT_ID.includes("YOUR_GOOGLE_CLIENT_ID") && APP_ID);
 
 let gapiInited = false;
 let pickerInited = false;
 
 const initGapiClient = async (): Promise<void> => {
-  if (gapiInited) return;
+  if (gapiInited || !isDriveConfigured) return;
   await window.gapi.client.init({
     apiKey: API_KEY,
     clientId: CLIENT_ID,
@@ -20,7 +23,7 @@ const initGapiClient = async (): Promise<void> => {
 };
 
 const initPicker = async (): Promise<void> => {
-    if (pickerInited) return;
+    if (pickerInited || !isDriveConfigured) return;
     await initGapiClient(); // Picker depends on gapi client
     pickerInited = true;
 };
@@ -34,6 +37,10 @@ const getToken = (): string | null => {
 };
 
 export const uploadProject = async (comicBook: ComicBook, fileId: string | null): Promise<string> => {
+    if (!isDriveConfigured) {
+        throw new Error("Google Drive integration is not configured. Cannot save project.");
+    }
+
     const blob = await createProjectBlob(comicBook);
     const token = getToken();
     if (!token) throw new Error("User not authenticated");
@@ -76,6 +83,10 @@ interface LoadResult {
 }
 
 export const loadProjectFromPicker = async (): Promise<LoadResult | null> => {
+    if (!isDriveConfigured) {
+        alert("Google Drive integration is not configured on the server.");
+        return null;
+    }
     return new Promise(async (resolve, reject) => {
         try {
             await initPicker();
@@ -88,7 +99,7 @@ export const loadProjectFromPicker = async (): Promise<LoadResult | null> => {
             view.setQuery("appProperties has { key='isComicBookCreatorProject' and value='true' }");
 
             const picker = new window.google.picker.PickerBuilder()
-                .setAppId(APP_ID)
+                .setAppId(APP_ID!)
                 .setOAuthToken(token)
                 .addView(view)
                 .setDeveloperKey(API_KEY)

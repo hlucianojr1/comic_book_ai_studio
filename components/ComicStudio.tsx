@@ -3,6 +3,7 @@ import { StudioState, Agent, StepStatus, StudioStepInfo } from '../types';
 import { 
     CheckCircleIcon, LoadingCircleIcon, PendingCircleIcon, ErrorCircleIcon, InputRequiredIcon,
     PlayIcon, StopIcon, RobotIcon, SendIcon, SunIcon, MoonIcon, ChevronLeftIcon, RefreshCwIcon,
+    UserCheckIcon, ThumbsUpIcon, ThumbsDownIcon,
 } from './Icons';
 import Spinner from './Spinner';
 import StudioCanvas from './StudioCanvas';
@@ -44,7 +45,8 @@ const mockOrchestrator = async (
     prompt: string,
     theme: 'light' | 'dark',
     updateState: React.Dispatch<React.SetStateAction<StudioState>>,
-    requestUserInput: (clarification: string) => Promise<string>
+    requestUserInput: (clarification: string) => Promise<string>,
+    requestUserApproval: () => Promise<boolean>
 ): Promise<void> => {
     let currentImageUrl: string | null = null;
     let fullStoryContext = `User's initial comic concept: "${prompt}"`;
@@ -199,15 +201,32 @@ const mockOrchestrator = async (
             return; // Stop the orchestrator
         }
         
-        const finalStepSummaryForHistory = stepOutputForDisplay ?? (stepSummary.split(': ')[1]?.trim() ?? stepSummary);
+        const finalStepSummaryForHistory = stepOutputForDisplay ?? (stepSummary.split(':')[1]?.trim() ?? stepSummary);
 
         // 4. Update state to SUCCESS for the current step
         updateState(prev => ({
             ...prev,
-            status: currentStepInfo.step === ALL_STEPS.length ? StepStatus.SUCCESS : StepStatus.IN_PROGRESS,
+            status: StepStatus.SUCCESS, // Temporarily set overall status to SUCCESS
             last_action_summary: stepSummary,
             history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.SUCCESS, summary: finalStepSummaryForHistory, imageUrl: currentImageUrl } : h),
         }));
+        
+        // 5. If not the last step, wait for user approval
+        if (currentStepInfo.step < ALL_STEPS.length) {
+            updateState(prev => ({
+                ...prev,
+                status: StepStatus.PENDING_USER_APPROVAL,
+                last_action_summary: `Step ${currentStepInfo.step} complete. Waiting for your approval to continue.`,
+            }));
+
+            const approved = await requestUserApproval();
+            if (!approved) {
+                throw new Error(`User rejected the output of step ${currentStepInfo.step}.`);
+            }
+        } else {
+             // This is the last step, we are done.
+             updateState(prev => ({ ...prev, status: StepStatus.SUCCESS, last_action_summary: "Workflow complete!" }));
+        }
     }
 };
 
@@ -221,6 +240,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     
     const orchestratorController = useRef<AbortController | null>(null);
     const userResolverRef = useRef<((value: string) => void) | null>(null);
+    const approvalResolverRef = useRef<((approved: boolean) => void) | null>(null);
     const stepRefs = useRef<Record<number, HTMLLIElement | null>>({});
 
     useEffect(() => {
@@ -267,9 +287,18 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 userResolverRef.current = resolve;
             });
         };
+        
+        const requestUserApproval = (): Promise<boolean> => {
+            return new Promise((resolve) => {
+                if (controller.signal.aborted) {
+                    return resolve(false);
+                }
+                approvalResolverRef.current = resolve;
+            });
+        };
 
         try {
-            await mockOrchestrator(prompt, theme, setStudioState, requestUserInput);
+            await mockOrchestrator(prompt, theme, setStudioState, requestUserInput, requestUserApproval);
         } catch (error) {
             if (controller.signal.aborted || (error instanceof Error && error.message.includes("aborted"))) {
                 console.log("Orchestrator process was aborted.");
@@ -278,8 +307,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 setStudioState(prev => ({
                     ...prev,
                     status: StepStatus.FAIL,
-                    last_action_summary: `An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}.`,
-                    history: prev.history.map(h => h.step === prev.current_step ? { ...h, status: StepStatus.FAIL } : h),
+                    last_action_summary: `${error instanceof Error ? error.message : 'An unexpected error occurred.'}`,
                 }));
             }
         } finally {
@@ -298,6 +326,10 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
         if (userResolverRef.current) {
             userResolverRef.current("Process aborted by user.");
             userResolverRef.current = null;
+        }
+        if (approvalResolverRef.current) {
+            approvalResolverRef.current(false);
+            approvalResolverRef.current = null;
         }
         setIsRunning(false);
         setStudioState(prev => ({
@@ -325,6 +357,22 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
             setUserInput('');
         }
     };
+
+    const handleApprove = () => {
+        if (approvalResolverRef.current) {
+            setStudioState(prev => ({ 
+                ...prev, 
+                status: StepStatus.IN_PROGRESS,
+                last_action_summary: 'Approval received. Starting next step...',
+            }));
+            approvalResolverRef.current(true);
+            approvalResolverRef.current = null;
+        }
+    };
+
+    const handleReject = () => {
+        handleStop();
+    };
     
     useEffect(() => {
         return () => {
@@ -335,6 +383,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
     }, []);
     
     const isAwaitingUserInput = studioState.status === StepStatus.PENDING_USER_INPUT;
+    const isAwaitingApproval = studioState.status === StepStatus.PENDING_USER_APPROVAL;
 
     return (
         <div className="flex h-full bg-gray-100 dark:bg-gray-900 overflow-hidden">
@@ -360,6 +409,7 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                                 [StepStatus.PENDING]: PendingCircleIcon,
                                 [StepStatus.FAIL]: ErrorCircleIcon,
                                 [StepStatus.PENDING_USER_INPUT]: InputRequiredIcon,
+                                [StepStatus.PENDING_USER_APPROVAL]: UserCheckIcon,
                             }[step.status];
 
                             const color = {
@@ -368,9 +418,10 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                                 [StepStatus.PENDING]: 'text-gray-400',
                                 [StepStatus.FAIL]: 'text-red-500',
                                 [StepStatus.PENDING_USER_INPUT]: 'text-yellow-500',
+                                [StepStatus.PENDING_USER_APPROVAL]: 'text-blue-500',
                             }[step.status];
 
-                            const isCurrent = step.step === studioState.current_step && isRunning;
+                            const isCurrent = step.step === studioState.current_step && isRunning && !isAwaitingApproval;
 
                             return (
                                 <li ref={el => (stepRefs.current[step.step] = el)} key={step.step} className={`flex items-start p-3 rounded-lg transition-colors ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/50' : ''}`}>
@@ -406,11 +457,22 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                             disabled={isRunning}
                         />
                         <div className="mt-4 flex items-center justify-end gap-3">
-                             <button onClick={handleReset} className="px-5 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md flex items-center gap-2" title="Reset Workflow">
+                             <button onClick={handleReset} className="px-5 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-md flex items-center gap-2" title="Reset Workflow" disabled={isRunning && !isAwaitingApproval}>
                                 <RefreshCwIcon className="w-4 h-4" />
                                 Reset
                             </button>
-                            {!isRunning ? (
+                            {isAwaitingApproval ? (
+                                <>
+                                    <button onClick={handleReject} className="px-8 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2">
+                                        <ThumbsDownIcon className="w-5 h-5"/>
+                                        Reject & Stop
+                                    </button>
+                                    <button onClick={handleApprove} className="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-500 transition-colors flex items-center gap-2">
+                                        <ThumbsUpIcon className="w-5 h-5"/>
+                                        Approve & Continue
+                                    </button>
+                                </>
+                            ) : !isRunning ? (
                                 <button onClick={handleStart} className="px-8 py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-500 transition-colors flex items-center gap-2">
                                     <PlayIcon className="w-5 h-5"/>
                                     Start Generation

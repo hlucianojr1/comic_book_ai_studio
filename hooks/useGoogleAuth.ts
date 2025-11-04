@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useLayoutEffect, RefObject } from 'react';
 
 // This would come from your environment variables
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com";
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 export const useGoogleAuth = () => {
     const [tokenClient, setTokenClient] = useState<any>(null);
@@ -45,6 +45,14 @@ export const useGoogleAuth = () => {
     }, [signOut]);
 
     useEffect(() => {
+        // If the client ID isn't set, we can't initialize Google Auth.
+        // We'll set auth as "ready" but leave the user as not signed in.
+        if (!CLIENT_ID || CLIENT_ID.includes("YOUR_GOOGLE_CLIENT_ID")) {
+            console.warn("Google Client ID not configured. Google Drive features will be disabled.");
+            setIsAuthReady(true);
+            return;
+        }
+        
         const initClients = () => {
             // GAPI client for Picker
             window.gapi.load('client:picker', () => {
@@ -82,7 +90,7 @@ export const useGoogleAuth = () => {
     }, [fetchUserProfile]);
 
     useEffect(() => {
-        if (!isAuthReady) return;
+        if (!isAuthReady || !CLIENT_ID || CLIENT_ID.includes("YOUR_GOOGLE_CLIENT_ID")) return;
 
         const storedToken = localStorage.getItem('g-token');
         if (storedToken) {
@@ -106,7 +114,7 @@ export const useGoogleAuth = () => {
             tokenClient.requestAccessToken({ prompt: '' });
         } else {
             console.error("Google Token Client not initialized.");
-            alert("Sign-in is not ready yet. Please try again in a moment.");
+            alert("Google Drive integration is not configured. Please use Local Storage instead.");
         }
     };
 
