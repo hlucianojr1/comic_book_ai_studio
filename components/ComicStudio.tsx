@@ -8,6 +8,7 @@ import {
 import Spinner from './Spinner';
 import StudioCanvas from './StudioCanvas';
 import { generateImage, editImage, generateText, generateStructuredText } from '../services/geminiService';
+import { Type } from '@google/genai';
 
 
 interface ComicStudioProps {
@@ -173,10 +174,10 @@ const mockOrchestrator = async (
                 const validationPrompt = `Act as a final editor. Perform a 3-point QC check on the comic page: 1. Continuity (Does the art match the story context?), 2. Lettering (Is text from the script placed correctly?), 3. Accuracy (Does it fulfill the user's original concept?). Provide a final validation report and a boolean pass/fail status. Mention that a technical check (DPI, margins) would happen in a real workflow.\n\nFull Context:\n${fullStoryContext}`;
                 
                 const validationSchema = {
-                    type: 'OBJECT',
+                    type: Type.OBJECT,
                     properties: {
-                        validation_passed: { type: 'BOOLEAN', description: 'Whether the page passes the final quality check.' },
-                        final_report: { type: 'STRING', description: 'A detailed report of the validation findings.' },
+                        validation_passed: { type: Type.BOOLEAN, description: 'Whether the page passes the final quality check.' },
+                        final_report: { type: Type.STRING, description: 'A detailed report of the validation findings.' },
                     },
                     required: ['validation_passed', 'final_report'],
                 };
@@ -455,6 +456,46 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                 <div className="flex-shrink-0">
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">AI Comic Studio</h1>
                     <p className="text-gray-600 dark:text-gray-400 mb-6">Enter a concept and let a multi-agent AI system create a full comic page from start to finish.</p>
+                </div>
+
+                {/* Main Content Area */}
+                <div className="flex-1 relative overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <StudioCanvas history={studioState.history} />
+                    
+                    {/* Agent Status as an overlay */}
+                    <div className="absolute bottom-4 right-4 w-full max-w-md z-10">
+                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col p-4 max-h-[40vh] overflow-hidden">
+                           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Agent Status</h3>
+                           <div className="flex-1 bg-gray-100 dark:bg-gray-900/80 rounded-lg p-4 flex flex-col justify-between overflow-y-auto">
+                               <div className="prose prose-sm dark:prose-invert max-w-none">
+                                   <p className="font-mono text-xs uppercase text-indigo-500 dark:text-indigo-400">{studioState.active_agent}</p>
+                                   <p>{studioState.last_action_summary}</p>
+                               </div>
+                               {isAwaitingUserInput && (
+                                   <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
+                                       <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">{studioState.next_instruction}</p>
+                                       <form onSubmit={handleUserInputSubmit} className="flex gap-2">
+                                           <input
+                                               type="text"
+                                               value={userInput}
+                                               onChange={(e) => setUserInput(e.target.value)}
+                                               className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                               placeholder="Provide clarification..."
+                                               autoFocus
+                                           />
+                                           <button type="submit" className="p-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-400">
+                                                <SendIcon className="w-5 h-5"/>
+                                           </button>
+                                       </form>
+                                   </div>
+                               )}
+                           </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Controls at the bottom */}
+                <div className="flex-shrink-0 mt-6">
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                         <textarea
                             value={prompt}
@@ -490,42 +531,6 @@ const ComicStudio: React.FC<ComicStudioProps> = ({ theme, onToggleTheme }) => {
                                     Stop Process
                                 </button>
                             )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Main Content Area */}
-                <div className="flex-1 mt-6 relative overflow-hidden rounded-lg bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700">
-                    <StudioCanvas history={studioState.history} />
-                    
-                    {/* Agent Status as an overlay */}
-                    <div className="absolute bottom-4 right-4 w-full max-w-md z-10">
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex flex-col p-4 max-h-[40vh] overflow-hidden">
-                           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 flex-shrink-0">Agent Status</h3>
-                           <div className="flex-1 bg-gray-100 dark:bg-gray-900/80 rounded-lg p-4 flex flex-col justify-between overflow-y-auto">
-                               <div className="prose prose-sm dark:prose-invert max-w-none">
-                                   <p className="font-mono text-xs uppercase text-indigo-500 dark:text-indigo-400">{studioState.active_agent}</p>
-                                   <p>{studioState.last_action_summary}</p>
-                               </div>
-                               {isAwaitingUserInput && (
-                                   <div className="mt-4 pt-4 border-t border-gray-300 dark:border-gray-600">
-                                       <p className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 mb-2">{studioState.next_instruction}</p>
-                                       <form onSubmit={handleUserInputSubmit} className="flex gap-2">
-                                           <input
-                                               type="text"
-                                               value={userInput}
-                                               onChange={(e) => setUserInput(e.target.value)}
-                                               className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                               placeholder="Provide clarification..."
-                                               autoFocus
-                                           />
-                                           <button type="submit" className="p-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-400">
-                                                <SendIcon className="w-5 h-5"/>
-                                           </button>
-                                       </form>
-                                   </div>
-                               )}
-                           </div>
                         </div>
                     </div>
                 </div>
