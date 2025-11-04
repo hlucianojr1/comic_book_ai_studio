@@ -51,6 +51,7 @@ const mockOrchestrator = async (
     
     for (let i = 0; i < ALL_STEPS.length; i++) {
         const currentStepInfo = ALL_STEPS[i];
+        let stepOutputForDisplay: string | undefined;
 
         // 1. Set current step to IN_PROGRESS
         updateState(prev => ({
@@ -80,23 +81,26 @@ const mockOrchestrator = async (
                 const seriesBible = await generateText(biblePrompt);
                 fullStoryContext += `\n\n--- SERIES BIBLE ---\n${seriesBible}`;
                 stepSummary = `Generated Series Bible defining the story's core elements.`;
+                stepOutputForDisplay = seriesBible;
             } else if (currentStepInfo.step === 2) { // Plot Outline
                 const outlinePrompt = `Based on the Series Bible, generate a Plot Outline for a single comic page using a Three-Act Structure. Describe the Key Story Beats and Narrative Goal for the beginning, middle, and end of the page.\n\nContext:\n${fullStoryContext}`;
                 const plotOutline = await generateText(outlinePrompt);
                 fullStoryContext += `\n\n--- PAGE 1 PLOT OUTLINE ---\n${plotOutline}`;
                 stepSummary = `Created a single-page plot outline with a three-act structure.`;
+                stepOutputForDisplay = plotOutline;
             } else if (currentStepInfo.step === 3) { // Reflection Check
                 const reflectionPrompt = `Act as a Structural Editor. Review the following Series Bible and Plot Outline. Is there any critical missing information or a direct contradiction? If yes, formulate a single, clear question for the user to clarify it. If no, respond with only the text "OK".\n\nContext:\n${fullStoryContext}`;
                 const reflectionResponse = await generateText(reflectionPrompt);
 
                 if (reflectionResponse.trim().toUpperCase() !== 'OK') {
                     const clarification = reflectionResponse;
+                    stepOutputForDisplay = `Agent requested clarification:\n\n"${clarification}"`;
                     updateState(prev => ({
                         ...prev,
                         status: StepStatus.PENDING_USER_INPUT,
                         last_action_summary: 'Awaiting user clarification.',
                         next_instruction: clarification,
-                        history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.PENDING_USER_INPUT, summary: "Needs user input" } : h),
+                        history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.PENDING_USER_INPUT, summary: stepOutputForDisplay } : h),
                     }));
 
                     const userResponse = await requestUserInput(clarification);
@@ -106,16 +110,19 @@ const mockOrchestrator = async (
                     
                     fullStoryContext += `\n\n--- USER CLARIFICATION ---\n${userResponse}`;
                     stepSummary = `User provided clarification. Resuming script generation.`;
+                    stepOutputForDisplay += `\n\nUser response:\n\n"${userResponse}"`; // Append user response
                     updateState(prev => ({ ...prev, status: StepStatus.IN_PROGRESS, next_instruction: null }));
                     await new Promise(resolve => setTimeout(resolve, 500));
                 } else {
                      stepSummary = `Automated reflection check passed. Story is coherent.`;
+                     stepOutputForDisplay = "Automated reflection check passed. Story is coherent.";
                 }
             } else if (currentStepInfo.step === 4) { // Full Script
                 const scriptPrompt = `Generate a full, single-page comic script with panel-by-panel instructions based on all the provided context. For each panel, specify: Camera Angle, Character Pose/Action, Setting, Lighting, and Dialogue/Narration.\n\nContext:\n${fullStoryContext}`;
                 const script = await generateText(scriptPrompt);
                 fullStoryContext += `\n\n--- FINAL SCRIPT (PAGE 1) ---\n${script}`;
-                stepSummary = `Generated detailed script: "${script.substring(0, 150)}..."`;
+                stepSummary = `Generated detailed script.`;
+                stepOutputForDisplay = script;
             } else if (currentStepInfo.step === 5) { // Visual Asset Lock
                 const characterPrompt = `Create a high-resolution character reference sheet based on this story: "${fullStoryContext}". Show the main character from multiple angles (front, side, back) in a clean, simple, black and white line art style. This will be used as a visual guide for the penciller.`;
                 currentImageUrl = await generateImage(characterPrompt, '1:1');
@@ -173,12 +180,11 @@ const mockOrchestrator = async (
                 };
 
                 const validationResult = await generateStructuredText(validationPrompt, validationSchema);
+                stepSummary = `Validation report generated.`;
+                stepOutputForDisplay = `QC CHECK\nValidation Passed: ${validationResult.validation_passed}\n\nFINAL REPORT:\n${validationResult.final_report}`;
                 
-                if (validationResult.validation_passed) {
-                    stepSummary = `Validation Passed: ${validationResult.final_report}`;
-                } else {
-                    stepSummary = `Validation Failed: ${validationResult.final_report}`;
-                    throw new Error(stepSummary); // Throw error to trigger FAIL state
+                if (!validationResult.validation_passed) {
+                    throw new Error(validationResult.final_report);
                 }
             }
         } catch (error) {
@@ -193,14 +199,14 @@ const mockOrchestrator = async (
             return; // Stop the orchestrator
         }
         
-        const finalSummary = stepSummary.split(': ')[1]?.trim() ?? stepSummary;
+        const finalStepSummaryForHistory = stepOutputForDisplay ?? (stepSummary.split(': ')[1]?.trim() ?? stepSummary);
 
         // 4. Update state to SUCCESS for the current step
         updateState(prev => ({
             ...prev,
             status: currentStepInfo.step === ALL_STEPS.length ? StepStatus.SUCCESS : StepStatus.IN_PROGRESS,
             last_action_summary: stepSummary,
-            history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.SUCCESS, summary: finalSummary, imageUrl: currentImageUrl } : h),
+            history: prev.history.map((h, idx) => idx === i ? { ...h, status: StepStatus.SUCCESS, summary: finalStepSummaryForHistory, imageUrl: currentImageUrl } : h),
         }));
     }
 };
